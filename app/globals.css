@@ -1,0 +1,110 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --primary: 240 5.9% 10%;
+    --primary-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --ring: 240 5.9% 10%;
+  }
+
+  .dark {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 240 5.9% 10%;
+    --border: 240 3.7% 15.9%;
+    --ring: 240 4.9% 83.9%;
+  }
+
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+  }
+}
+
+@layer components {
+  .signal-bullish {
+    @apply bg-bullish-100 text-bullish-700 border-bullish-500 dark:bg-bullish-500/20 dark:text-bullish-500;
+  }
+  .signal-bearish {
+    @apply bg-bearish-100 text-bearish-700 border-bearish-500 dark:bg-bearish-500/20 dark:text-bearish-500;
+  }
+  .signal-neutral {
+    @apply bg-neutral-100 text-neutral-700 border-neutral-500 dark:bg-neutral-500/20 dark:text-neutral-400;
+  }
+
+  .chart-container {
+    @apply w-full rounded-lg border p-4;
+    background-color: hsl(var(--background));
+  }
+
+  .card {
+    @apply rounded-lg border shadow-sm;
+    background-color: hsl(var(--background));
+  }
+  .card-header {
+    @apply flex flex-col space-y-1.5 p-6;
+  }
+  .card-content {
+    @apply p-6 pt-0;
+  }
+
+  .text-muted-foreground {
+    color: hsl(var(--muted-foreground));
+  }
+
+  .bg-muted {
+    background-color: hsl(var(--muted));
+  }
+
+  .bg-muted\/50 {
+    background-color: hsl(var(--muted) / 0.5);
+  }
+
+  .bg-primary {
+    background-color: hsl(var(--primary));
+  }
+
+  .text-primary-foreground {
+    color: hsl(var(--primary-foreground));
+  }
+
+  /* Dark mode specific overrides */
+  .dark .bg-green-100 {
+    @apply bg-green-500/20;
+  }
+  .dark .text-green-800 {
+    @apply text-green-400;
+  }
+  .dark .bg-red-100 {
+    @apply bg-red-500/20;
+  }
+  .dark .text-red-800 {
+    @apply text-red-400;
+  }
+  .dark .bg-gray-100 {
+    @apply bg-gray-500/20;
+  }
+  .dark .text-gray-800 {
+    @apply text-gray-400;
+  }
+  .dark .bg-blue-50 {
+    @apply bg-blue-500/20;
+  }
+  .dark .border-blue-200 {
+    @apply border-blue-500/30;
+  }
+}
