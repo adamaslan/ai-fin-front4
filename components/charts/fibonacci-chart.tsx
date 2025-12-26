@@ -11,7 +11,7 @@ import {
   ReferenceLine,
   ReferenceArea,
   ResponsiveContainer,
-  Label,
+  Scatter,
 } from 'recharts';
 import { CHART_COLORS } from '@/lib/charts/theme';
 import type { IndicatorData, Signal } from '@/lib/types/analysis';
@@ -21,54 +21,87 @@ interface FibonacciChartProps {
   signals: Signal[];
 }
 
-// Fibonacci levels with support/resistance classification
+// Fibonacci levels - standard retracement levels
 const FIB_LEVELS = [
-  { level: 0, label: '0%', shortLabel: '0%', color: '#22c55e', type: 'resistance' },
-  { level: 0.236, label: '23.6%', shortLabel: '23.6%', color: '#84cc16', type: 'resistance' },
-  { level: 0.382, label: '38.2%', shortLabel: '38.2%', color: '#eab308', type: 'key' },
-  { level: 0.5, label: '50%', shortLabel: '50%', color: '#f97316', type: 'key' },
-  { level: 0.618, label: '61.8% (Golden)', shortLabel: '61.8%', color: '#ef4444', type: 'key' },
-  { level: 0.786, label: '78.6%', shortLabel: '78.6%', color: '#dc2626', type: 'support' },
-  { level: 1, label: '100%', shortLabel: '100%', color: '#b91c1c', type: 'support' },
+  { level: 0, label: '0% (Swing High)', shortLabel: '0%', color: '#22c55e', role: 'high' },
+  { level: 0.236, label: '23.6%', shortLabel: '23.6%', color: '#84cc16', role: 'minor' },
+  { level: 0.382, label: '38.2%', shortLabel: '38.2%', color: '#eab308', role: 'key' },
+  { level: 0.5, label: '50%', shortLabel: '50%', color: '#f97316', role: 'key' },
+  { level: 0.618, label: '61.8% (Golden Ratio)', shortLabel: '61.8%', color: '#ef4444', role: 'golden' },
+  { level: 0.786, label: '78.6%', shortLabel: '78.6%', color: '#dc2626', role: 'deep' },
+  { level: 1, label: '100% (Swing Low)', shortLabel: '100%', color: '#b91c1c', role: 'low' },
 ];
 
-// Generate historical price data showing retracement patterns
-function generateHistoricalPrices(
+// Generate price history that demonstrates Fibonacci retracement based on signal
+function generateFibonacciPriceHistory(
   currentPrice: number,
-  rangeHigh: number,
-  rangeLow: number,
-  periods: number = 30
+  swingHigh: number,
+  swingLow: number,
+  fibSignals: Signal[],
+  periods: number = 50
 ) {
   const data = [];
-  const range = rangeHigh - rangeLow;
+  const range = swingHigh - swingLow;
 
-  // Create a realistic price pattern with swing high and retracement
+  // Determine the retracement story based on signals
+  const hasSupportSignal = fibSignals.some(s =>
+    s.name.toLowerCase().includes('support') ||
+    s.trading_implication?.toLowerCase().includes('support')
+  );
+  const hasResistanceSignal = fibSignals.some(s =>
+    s.name.toLowerCase().includes('resistance') ||
+    s.trading_implication?.toLowerCase().includes('resist')
+  );
+
+  // Find what Fib level the signal is referencing
+  const signalValue = fibSignals[0]?.value || 0.618;
+  const targetFibLevel = signalValue > 1 ? signalValue / 100 : signalValue;
+
   for (let i = 0; i < periods; i++) {
     const progress = i / (periods - 1);
+    let price: number;
 
-    // Create a pattern: rise to high, then retrace
-    let price;
-    if (progress < 0.3) {
-      // Initial rise phase
-      price = rangeLow + (range * 0.3) + (range * 0.7 * (progress / 0.3));
-    } else if (progress < 0.4) {
-      // Peak phase
-      price = rangeHigh - (range * 0.05 * Math.random());
-    } else if (progress < 0.8) {
-      // Retracement phase
-      const retracementProgress = (progress - 0.4) / 0.4;
-      const retracementTarget = rangeHigh - (range * 0.618); // 61.8% retracement
-      price = rangeHigh - ((rangeHigh - retracementTarget) * retracementProgress);
-      price += (Math.random() - 0.5) * range * 0.08;
-    } else {
-      // Recovery/current phase
-      const recoveryProgress = (progress - 0.8) / 0.2;
-      const startPrice = rangeHigh - (range * 0.618);
-      price = startPrice + ((currentPrice - startPrice) * recoveryProgress);
+    // Phase 1: Initial trend up to swing high (0-25%)
+    if (progress < 0.25) {
+      const phaseProgress = progress / 0.25;
+      price = swingLow + (range * 0.4) + (range * 0.6 * phaseProgress);
     }
+    // Phase 2: At swing high with small consolidation (25-30%)
+    else if (progress < 0.30) {
+      price = swingHigh - (range * 0.02 * Math.sin(progress * 20));
+    }
+    // Phase 3: Retracement down toward Fib level (30-60%)
+    else if (progress < 0.60) {
+      const phaseProgress = (progress - 0.30) / 0.30;
+      const retracementTarget = swingHigh - (range * targetFibLevel);
+      // Add some oscillation during retracement
+      const oscillation = Math.sin(phaseProgress * Math.PI * 3) * range * 0.03;
+      price = swingHigh - ((swingHigh - retracementTarget) * phaseProgress) + oscillation;
+    }
+    // Phase 4: Testing/bouncing at Fib level (60-75%)
+    else if (progress < 0.75) {
+      const phaseProgress = (progress - 0.60) / 0.15;
+      const fibPrice = swingHigh - (range * targetFibLevel);
+      // Show price testing the level multiple times
+      const bounce = Math.sin(phaseProgress * Math.PI * 4) * range * 0.04;
+      price = fibPrice + bounce;
+    }
+    // Phase 5: Reaction from Fib level to current price (75-100%)
+    else {
+      const phaseProgress = (progress - 0.75) / 0.25;
+      const fibPrice = swingHigh - (range * targetFibLevel);
 
-    // Add some noise for realism
-    price += (Math.random() - 0.5) * range * 0.02;
+      if (hasSupportSignal) {
+        // Bounce up from support
+        price = fibPrice + ((currentPrice - fibPrice) * phaseProgress);
+      } else if (hasResistanceSignal) {
+        // Rejection down from resistance
+        price = fibPrice - ((fibPrice - currentPrice) * phaseProgress);
+      } else {
+        // Neutral - move toward current price
+        price = fibPrice + ((currentPrice - fibPrice) * phaseProgress);
+      }
+    }
 
     // Ensure last point is exactly current price
     if (i === periods - 1) {
@@ -77,10 +110,10 @@ function generateHistoricalPrices(
 
     data.push({
       period: i + 1,
-      label: i === periods - 1 ? 'Now' : i === 0 ? `${periods - 1}d` : '',
+      day: periods - i,
       price: price,
-      high: price + range * 0.01,
-      low: price - range * 0.01,
+      isSwingHigh: progress >= 0.25 && progress < 0.30,
+      isFibTest: progress >= 0.60 && progress < 0.75,
     });
   }
 
@@ -89,24 +122,45 @@ function generateHistoricalPrices(
 
 export function FibonacciChart({ indicators, signals }: FibonacciChartProps) {
   const currentPrice = indicators.Current_Price;
+  const high = indicators.High;
+  const low = indicators.Low;
 
-  // Calculate Fibonacci levels based on the price range
+  // Get Fibonacci-related signals
+  const fibSignals = signals.filter(s =>
+    s.category === 'FIBONACCI' || s.name.toLowerCase().includes('fib')
+  );
+
+  // Use actual high/low or calculate from MAs for swing range
   const prices = [
     indicators.SMA_20,
     indicators.SMA_50,
     indicators.SMA_200,
     currentPrice,
+    high,
+    low,
   ].filter(p => p > 0);
 
-  const rangeHigh = Math.max(...prices) * 1.05;
-  const rangeLow = Math.min(...prices) * 0.95;
-  const range = rangeHigh - rangeLow;
+  // Determine swing high and low for Fibonacci calculation
+  const swingHigh = Math.max(high, Math.max(...prices) * 1.02);
+  const swingLow = Math.min(low, Math.min(...prices) * 0.98);
+  const range = swingHigh - swingLow;
 
   // Calculate actual price levels for each Fibonacci level
   const fibLevels = FIB_LEVELS.map(fib => ({
     ...fib,
-    price: rangeHigh - (range * fib.level),
+    price: swingHigh - (range * fib.level),
   }));
+
+  // Find which Fibonacci level is most relevant to the signal
+  const signalFibLevel = fibSignals[0]?.value || 0;
+  const normalizedSignalLevel = signalFibLevel > 1 ? signalFibLevel / 100 : signalFibLevel;
+
+  // Find closest Fib level to signal
+  const activeFibIndex = fibLevels.reduce((closest, fib, i) => {
+    const currentDiff = Math.abs(fib.level - normalizedSignalLevel);
+    const closestDiff = Math.abs(fibLevels[closest].level - normalizedSignalLevel);
+    return currentDiff < closestDiff ? i : closest;
+  }, 0);
 
   // Find which Fibonacci zone the current price is in
   const currentZone = fibLevels.findIndex((fib, i) => {
@@ -121,89 +175,117 @@ export function FibonacciChart({ indicators, signals }: FibonacciChartProps) {
   const nearestResistance = resistanceLevels[resistanceLevels.length - 1];
   const nearestSupport = supportLevels[0];
 
-  // Get Fibonacci-related signals
-  const fibSignals = signals.filter(s =>
-    s.category === 'FIBONACCI' || s.name.includes('FIB')
+  // Generate price history that demonstrates the Fibonacci pattern
+  const priceHistory = generateFibonacciPriceHistory(
+    currentPrice, swingHigh, swingLow, fibSignals, 50
   );
 
-  // Generate 30 periods of historical price data
-  const priceHistory = generateHistoricalPrices(currentPrice, rangeHigh, rangeLow, 30);
+  // Find key points in the price history
+  const swingHighPoint = priceHistory.find(d => d.isSwingHigh);
+  const fibTestPoints = priceHistory.filter(d => d.isFibTest);
 
-  // Find swing high and swing low in the data
-  const swingHigh = Math.max(...priceHistory.map(d => d.price));
-  const swingLow = Math.min(...priceHistory.map(d => d.price));
-  const swingHighIndex = priceHistory.findIndex(d => d.price === swingHigh);
-  const swingLowIndex = priceHistory.findIndex(d => d.price === swingLow);
+  // Determine signal interpretation
+  const signalType = fibSignals[0]?.strength || 'NEUTRAL';
+  const isBullishSignal = signalType === 'BULLISH' || signalType === 'STRONG';
+  const isBearishSignal = signalType === 'BEARISH' || signalType === 'WEAK';
 
   return (
     <div className="card">
       <div className="card-header">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="font-medium">Fibonacci Retracement</h3>
+            <h3 className="font-medium">Fibonacci Retracement Analysis</h3>
             <p className="text-sm text-muted-foreground">
-              30-period price action with key support and resistance levels
+              50-day price action showing retracement from swing high to key Fibonacci levels
             </p>
           </div>
-          <div className="flex gap-4 text-xs">
-            <div className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded bg-green-500/30 border-2 border-green-500" />
-              <span>Support</span>
+          {fibSignals.length > 0 && (
+            <div
+              className="px-3 py-1.5 rounded-full text-sm font-medium"
+              style={{
+                backgroundColor: isBullishSignal ? 'rgba(34, 197, 94, 0.15)' :
+                                isBearishSignal ? 'rgba(239, 68, 68, 0.15)' :
+                                'rgba(100, 100, 100, 0.15)',
+                color: isBullishSignal ? '#22c55e' :
+                       isBearishSignal ? '#ef4444' :
+                       '#888',
+                border: `1px solid ${isBullishSignal ? '#22c55e' : isBearishSignal ? '#ef4444' : '#888'}40`
+              }}
+            >
+              {fibSignals[0]?.name}
             </div>
-            <div className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded bg-red-500/30 border-2 border-red-500" />
-              <span>Resistance</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded bg-yellow-500/30 border-2 border-yellow-500" />
-              <span>Key Level</span>
-            </div>
-          </div>
+          )}
         </div>
       </div>
       <div className="card-content">
-        {/* Main Chart - Full Width with Price History and Fibonacci Lines */}
+        {/* Signal Explanation */}
+        {fibSignals.length > 0 && (
+          <div
+            className="mb-6 p-4 rounded-lg border-l-4"
+            style={{
+              borderLeftColor: isBullishSignal ? '#22c55e' : isBearishSignal ? '#ef4444' : '#f97316',
+              backgroundColor: isBullishSignal ? 'rgba(34, 197, 94, 0.05)' :
+                              isBearishSignal ? 'rgba(239, 68, 68, 0.05)' :
+                              'rgba(249, 115, 22, 0.05)'
+            }}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="font-medium text-sm mb-1">{fibSignals[0]?.name}</p>
+                <p className="text-sm text-muted-foreground">{fibSignals[0]?.description}</p>
+                {fibSignals[0]?.trading_implication && (
+                  <p className="text-sm mt-2 font-medium" style={{
+                    color: isBullishSignal ? '#22c55e' : isBearishSignal ? '#ef4444' : '#f97316'
+                  }}>
+                    → {fibSignals[0].trading_implication}
+                  </p>
+                )}
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-muted-foreground">Confidence</p>
+                <p className="text-lg font-bold">{((fibSignals[0]?.confidence || 0) * 100).toFixed(0)}%</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Main Chart - Price History with Fibonacci Levels */}
         <div className="h-[400px] mb-6">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
               data={priceHistory}
-              margin={{ top: 20, right: 100, left: 60, bottom: 20 }}
+              margin={{ top: 20, right: 110, left: 60, bottom: 30 }}
             >
               <defs>
                 {/* Price area gradient */}
-                <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.4} />
-                  <stop offset="50%" stopColor="#3b82f6" stopOpacity={0.2} />
+                <linearGradient id="priceAreaGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.3} />
                   <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.05} />
                 </linearGradient>
-                {/* Support zone gradient */}
-                <linearGradient id="supportZoneGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#22c55e" stopOpacity={0.15} />
-                  <stop offset="100%" stopColor="#22c55e" stopOpacity={0.05} />
-                </linearGradient>
-                {/* Resistance zone gradient */}
-                <linearGradient id="resistanceZoneGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#ef4444" stopOpacity={0.05} />
-                  <stop offset="100%" stopColor="#ef4444" stopOpacity={0.15} />
+                {/* Active Fib zone highlight */}
+                <linearGradient id="activeFibZone" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={isBullishSignal ? '#22c55e' : '#ef4444'} stopOpacity={0.2} />
+                  <stop offset="100%" stopColor={isBullishSignal ? '#22c55e' : '#ef4444'} stopOpacity={0.1} />
                 </linearGradient>
               </defs>
 
               <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
               <XAxis
-                dataKey="period"
+                dataKey="day"
                 tick={{ fontSize: 10 }}
-                tickFormatter={(v) => v === 1 ? '30d ago' : v === 30 ? 'Now' : ''}
-                interval={0}
+                tickFormatter={(v) => v === 50 ? '50d ago' : v === 1 ? 'Today' : v % 10 === 0 ? `${v}d` : ''}
+                reversed
+                label={{ value: '← Days Ago', position: 'bottom', offset: 10, fontSize: 11, fill: '#888' }}
               />
               <YAxis
-                domain={[rangeLow * 0.98, rangeHigh * 1.02]}
+                domain={[swingLow * 0.99, swingHigh * 1.01]}
                 tick={{ fontSize: 11 }}
                 tickFormatter={(v) => `$${v.toFixed(0)}`}
                 width={55}
               />
               <Tooltip
                 formatter={(value: number) => [`$${value.toFixed(2)}`, 'Price']}
-                labelFormatter={(label) => `Period ${label}`}
+                labelFormatter={(label) => `${label} days ago`}
                 contentStyle={{
                   backgroundColor: 'hsl(var(--background))',
                   border: '1px solid hsl(var(--border))',
@@ -212,20 +294,17 @@ export function FibonacciChart({ indicators, signals }: FibonacciChartProps) {
                 }}
               />
 
-              {/* Colored zones between Fibonacci levels */}
+              {/* Highlight zones between Fib levels */}
               {fibLevels.slice(0, -1).map((fib, i) => {
                 const nextFib = fibLevels[i + 1];
+                const isActiveFib = i === activeFibIndex || i + 1 === activeFibIndex;
                 const isCurrentZoneArea = i === currentZone;
-                const isAbovePrice = fib.price > currentPrice && nextFib.price > currentPrice;
-                const isBelowPrice = fib.price < currentPrice && nextFib.price < currentPrice;
 
-                let fillColor = 'rgba(100, 100, 100, 0.03)';
-                if (isCurrentZoneArea) {
-                  fillColor = 'rgba(59, 130, 246, 0.15)';
-                } else if (isAbovePrice) {
-                  fillColor = 'rgba(239, 68, 68, 0.06)';
-                } else if (isBelowPrice) {
-                  fillColor = 'rgba(34, 197, 94, 0.06)';
+                let fillColor = 'rgba(100, 100, 100, 0.02)';
+                if (isActiveFib) {
+                  fillColor = 'url(#activeFibZone)';
+                } else if (isCurrentZoneArea) {
+                  fillColor = 'rgba(59, 130, 246, 0.08)';
                 }
 
                 return (
@@ -241,31 +320,61 @@ export function FibonacciChart({ indicators, signals }: FibonacciChartProps) {
 
               {/* Fibonacci Level Lines */}
               {fibLevels.map((fib, i) => {
-                const isActive = i === currentZone || i === currentZone + 1;
+                const isActive = i === activeFibIndex;
+                const isKey = fib.role === 'key' || fib.role === 'golden';
+
                 return (
                   <ReferenceLine
                     key={fib.label}
                     y={fib.price}
                     stroke={fib.color}
-                    strokeWidth={isActive ? 3 : fib.type === 'key' ? 2 : 1.5}
-                    strokeDasharray={fib.type === 'key' ? '0' : '8 4'}
+                    strokeWidth={isActive ? 4 : isKey ? 2.5 : 1.5}
+                    strokeDasharray={isActive ? '0' : isKey ? '0' : '6 4'}
                     label={{
                       value: `${fib.shortLabel} $${fib.price.toFixed(0)}`,
                       position: 'right',
                       fill: fib.color,
-                      fontSize: isActive ? 11 : 10,
+                      fontSize: isActive ? 12 : 10,
                       fontWeight: isActive ? 700 : 500,
                     }}
                   />
                 );
               })}
 
+              {/* Swing High marker */}
+              <ReferenceLine
+                y={swingHigh}
+                stroke="#22c55e"
+                strokeWidth={0}
+                label={{
+                  value: '▼ SWING HIGH',
+                  position: 'insideTopRight',
+                  fill: '#22c55e',
+                  fontSize: 10,
+                  fontWeight: 600,
+                }}
+              />
+
+              {/* Swing Low marker */}
+              <ReferenceLine
+                y={swingLow}
+                stroke="#ef4444"
+                strokeWidth={0}
+                label={{
+                  value: '▲ SWING LOW',
+                  position: 'insideBottomRight',
+                  fill: '#ef4444',
+                  fontSize: 10,
+                  fontWeight: 600,
+                }}
+              />
+
               {/* Price Area Fill */}
               <Area
                 type="monotone"
                 dataKey="price"
                 stroke="transparent"
-                fill="url(#priceGradient)"
+                fill="url(#priceAreaGradient)"
               />
 
               {/* Price Line */}
@@ -275,41 +384,35 @@ export function FibonacciChart({ indicators, signals }: FibonacciChartProps) {
                 stroke="#3b82f6"
                 strokeWidth={2.5}
                 dot={(props: any) => {
-                  const { cx, cy, index } = props;
-                  // Highlight current price and swing points
+                  const { cx, cy, index, payload } = props;
+                  // Current price - large blue dot
                   if (index === priceHistory.length - 1) {
                     return (
-                      <circle
-                        cx={cx}
-                        cy={cy}
-                        r={8}
-                        fill="#3b82f6"
-                        stroke="#fff"
-                        strokeWidth={3}
-                      />
+                      <g key={`dot-${index}`}>
+                        <circle cx={cx} cy={cy} r={10} fill="#3b82f6" stroke="#fff" strokeWidth={3} />
+                        <text x={cx - 40} y={cy - 15} fill="#3b82f6" fontSize={10} fontWeight={600}>
+                          NOW
+                        </text>
+                      </g>
                     );
                   }
-                  if (index === swingHighIndex) {
+                  // Swing high area
+                  if (payload.isSwingHigh && index === Math.floor(priceHistory.length * 0.27)) {
                     return (
-                      <circle
-                        cx={cx}
-                        cy={cy}
-                        r={6}
-                        fill="#22c55e"
-                        stroke="#fff"
-                        strokeWidth={2}
-                      />
+                      <circle key={`dot-${index}`} cx={cx} cy={cy} r={6} fill="#22c55e" stroke="#fff" strokeWidth={2} />
                     );
                   }
-                  if (index === swingLowIndex) {
+                  // Fib test area - show bounces
+                  if (payload.isFibTest && index % 3 === 0) {
                     return (
                       <circle
+                        key={`dot-${index}`}
                         cx={cx}
                         cy={cy}
-                        r={6}
-                        fill="#ef4444"
+                        r={4}
+                        fill={isBullishSignal ? '#22c55e' : '#ef4444'}
                         stroke="#fff"
-                        strokeWidth={2}
+                        strokeWidth={1}
                       />
                     );
                   }
@@ -322,46 +425,42 @@ export function FibonacciChart({ indicators, signals }: FibonacciChartProps) {
         </div>
 
         {/* Chart Legend */}
-        <div className="flex justify-center gap-6 mb-6 text-xs">
+        <div className="flex flex-wrap justify-center gap-4 mb-6 text-xs border-t border-b py-3">
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded-full bg-blue-500 border-2 border-white shadow" />
-            <span>Current Price</span>
+            <div className="w-5 h-5 rounded-full bg-blue-500 border-2 border-white shadow" />
+            <span>Current Price (${currentPrice.toFixed(2)})</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-green-500" />
-            <span>Swing High</span>
+            <div className="w-4 h-4 rounded-full bg-green-500 border border-white" />
+            <span>Swing High (${swingHigh.toFixed(2)})</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-red-500" />
-            <span>Swing Low</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-0.5 bg-yellow-500" />
-            <span>Key Fib Level (solid)</span>
+            <div className="w-10 h-1 rounded" style={{ backgroundColor: fibLevels[activeFibIndex]?.color }} />
+            <span>Active Fib Level ({fibLevels[activeFibIndex]?.shortLabel})</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-8 h-0.5 border-t-2 border-dashed border-gray-400" />
-            <span>Other Level (dashed)</span>
+            <span>Other Levels</span>
           </div>
         </div>
 
-        {/* Support & Resistance Summary Cards */}
+        {/* Key Levels Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           {/* Nearest Resistance */}
-          <div className="p-4 rounded-lg bg-red-500/10 border-2 border-red-500/30">
+          <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/30">
             <div className="flex items-center gap-2 mb-2">
-              <svg className="w-5 h-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
               </svg>
-              <span className="text-sm font-medium text-red-500">RESISTANCE</span>
+              <span className="text-xs font-medium text-red-500 uppercase">Next Resistance</span>
             </div>
             {nearestResistance ? (
               <>
-                <p className="text-2xl font-bold" style={{ color: nearestResistance.color }}>
+                <p className="text-xl font-bold" style={{ color: nearestResistance.color }}>
                   ${nearestResistance.price.toFixed(2)}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {nearestResistance.label} • {((nearestResistance.price - currentPrice) / currentPrice * 100).toFixed(1)}% above
+                  {nearestResistance.label} • +{((nearestResistance.price - currentPrice) / currentPrice * 100).toFixed(1)}%
                 </p>
               </>
             ) : (
@@ -369,39 +468,46 @@ export function FibonacciChart({ indicators, signals }: FibonacciChartProps) {
             )}
           </div>
 
-          {/* Current Position */}
-          <div className="p-4 rounded-lg bg-blue-500/10 border-2 border-blue-500/30">
+          {/* Active Fib Level */}
+          <div
+            className="p-4 rounded-lg border-2"
+            style={{
+              backgroundColor: `${fibLevels[activeFibIndex]?.color}15`,
+              borderColor: `${fibLevels[activeFibIndex]?.color}50`
+            }}
+          >
             <div className="flex items-center gap-2 mb-2">
-              <svg className="w-5 h-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-              </svg>
-              <span className="text-sm font-medium text-blue-500">CURRENT PRICE</span>
+              <div
+                className="w-3 h-3 rounded-full animate-pulse"
+                style={{ backgroundColor: fibLevels[activeFibIndex]?.color }}
+              />
+              <span className="text-xs font-medium uppercase" style={{ color: fibLevels[activeFibIndex]?.color }}>
+                Signal Level
+              </span>
             </div>
-            <p className="text-2xl font-bold text-blue-500">
-              ${currentPrice.toFixed(2)}
+            <p className="text-xl font-bold" style={{ color: fibLevels[activeFibIndex]?.color }}>
+              ${fibLevels[activeFibIndex]?.price.toFixed(2)}
             </p>
-            {currentZone >= 0 && currentZone < fibLevels.length - 1 && (
-              <p className="text-xs text-muted-foreground mt-1">
-                In zone: {fibLevels[currentZone].label} → {fibLevels[currentZone + 1].label}
-              </p>
-            )}
+            <p className="text-xs text-muted-foreground mt-1">
+              {fibLevels[activeFibIndex]?.label}
+            </p>
           </div>
 
           {/* Nearest Support */}
-          <div className="p-4 rounded-lg bg-green-500/10 border-2 border-green-500/30">
+          <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/30">
             <div className="flex items-center gap-2 mb-2">
-              <svg className="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
-              <span className="text-sm font-medium text-green-500">SUPPORT</span>
+              <span className="text-xs font-medium text-green-500 uppercase">Next Support</span>
             </div>
             {nearestSupport ? (
               <>
-                <p className="text-2xl font-bold" style={{ color: nearestSupport.color }}>
+                <p className="text-xl font-bold" style={{ color: nearestSupport.color }}>
                   ${nearestSupport.price.toFixed(2)}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {nearestSupport.label} • {((currentPrice - nearestSupport.price) / currentPrice * 100).toFixed(1)}% below
+                  {nearestSupport.label} • -{((currentPrice - nearestSupport.price) / currentPrice * 100).toFixed(1)}%
                 </p>
               </>
             ) : (
@@ -410,120 +516,54 @@ export function FibonacciChart({ indicators, signals }: FibonacciChartProps) {
           </div>
         </div>
 
-        {/* Detailed Level Breakdown */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Resistance Levels (above current price) */}
-          <div>
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-4 h-1 bg-red-500 rounded" />
-              <h4 className="text-sm font-semibold text-red-500">Resistance Levels</h4>
-              <span className="text-xs text-muted-foreground">({resistanceLevels.length} levels above)</span>
-            </div>
-            <div className="space-y-2">
-              {resistanceLevels.length > 0 ? (
-                [...resistanceLevels].reverse().map((fib, i) => {
-                  const distance = ((fib.price - currentPrice) / currentPrice * 100).toFixed(1);
-                  const isNearest = i === resistanceLevels.length - 1;
-                  return (
-                    <div
-                      key={fib.label}
-                      className={`flex items-center justify-between p-3 rounded-lg border-l-4 ${
-                        isNearest ? 'bg-red-500/10' : 'bg-muted/30'
-                      }`}
-                      style={{ borderLeftColor: fib.color }}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className="w-4 h-4 rounded-full border-2"
-                          style={{ borderColor: fib.color, backgroundColor: `${fib.color}30` }}
-                        />
-                        <div>
-                          <span className="font-medium">{fib.label}</span>
-                          {fib.type === 'key' && (
-                            <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-600">KEY</span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <span className="font-semibold" style={{ color: fib.color }}>
-                          ${fib.price.toFixed(2)}
-                        </span>
-                        <span className="text-xs text-red-500 ml-2">+{distance}%</span>
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <p className="text-sm text-muted-foreground p-3 bg-muted/30 rounded-lg">
-                  Price is above all Fibonacci levels
-                </p>
-              )}
-            </div>
-          </div>
+        {/* All Fibonacci Levels */}
+        <div className="grid grid-cols-7 gap-2">
+          {fibLevels.map((fib, i) => {
+            const isActive = i === activeFibIndex;
+            const isCurrent = i === currentZone || i === currentZone + 1;
+            const distancePercent = ((currentPrice - fib.price) / currentPrice * 100);
 
-          {/* Support Levels (below current price) */}
-          <div>
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-4 h-1 bg-green-500 rounded" />
-              <h4 className="text-sm font-semibold text-green-500">Support Levels</h4>
-              <span className="text-xs text-muted-foreground">({supportLevels.length} levels below)</span>
-            </div>
-            <div className="space-y-2">
-              {supportLevels.length > 0 ? (
-                supportLevels.map((fib, i) => {
-                  const distance = ((currentPrice - fib.price) / currentPrice * 100).toFixed(1);
-                  const isNearest = i === 0;
-                  return (
-                    <div
-                      key={fib.label}
-                      className={`flex items-center justify-between p-3 rounded-lg border-l-4 ${
-                        isNearest ? 'bg-green-500/10' : 'bg-muted/30'
-                      }`}
-                      style={{ borderLeftColor: fib.color }}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className="w-4 h-4 rounded-full border-2"
-                          style={{ borderColor: fib.color, backgroundColor: `${fib.color}30` }}
-                        />
-                        <div>
-                          <span className="font-medium">{fib.label}</span>
-                          {fib.type === 'key' && (
-                            <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-600">KEY</span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <span className="font-semibold" style={{ color: fib.color }}>
-                          ${fib.price.toFixed(2)}
-                        </span>
-                        <span className="text-xs text-green-500 ml-2">-{distance}%</span>
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <p className="text-sm text-muted-foreground p-3 bg-muted/30 rounded-lg">
-                  Price is below all Fibonacci levels
+            return (
+              <div
+                key={fib.label}
+                className={`p-2 rounded-lg text-center transition-all ${
+                  isActive ? 'ring-2 ring-offset-2' : ''
+                }`}
+                style={{
+                  backgroundColor: isActive ? `${fib.color}20` : isCurrent ? `${fib.color}10` : 'rgba(100,100,100,0.05)',
+                  ringColor: isActive ? fib.color : undefined,
+                }}
+              >
+                <div
+                  className="w-full h-1 rounded mb-2"
+                  style={{ backgroundColor: fib.color }}
+                />
+                <p className="text-xs font-bold" style={{ color: fib.color }}>
+                  {fib.shortLabel}
                 </p>
-              )}
-            </div>
-          </div>
+                <p className="text-xs text-muted-foreground">
+                  ${fib.price.toFixed(0)}
+                </p>
+                <p
+                  className="text-[10px] font-medium"
+                  style={{ color: distancePercent > 0 ? '#22c55e' : '#ef4444' }}
+                >
+                  {distancePercent > 0 ? '+' : ''}{distancePercent.toFixed(1)}%
+                </p>
+              </div>
+            );
+          })}
         </div>
 
-        {/* Fibonacci Signals */}
-        {fibSignals.length > 0 && (
-          <div className="mt-6 pt-6 border-t">
-            <h4 className="text-sm font-semibold mb-3">Active Fibonacci Signals</h4>
+        {/* Additional Signals */}
+        {fibSignals.length > 1 && (
+          <div className="mt-6 pt-4 border-t">
+            <h4 className="text-sm font-semibold mb-3">Additional Fibonacci Signals</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {fibSignals.map((sig, i) => (
+              {fibSignals.slice(1).map((sig, i) => (
                 <div
                   key={i}
-                  className="p-3 rounded-lg border-2"
-                  style={{
-                    borderColor: CHART_COLORS.categories.FIBONACCI,
-                    backgroundColor: `${CHART_COLORS.categories.FIBONACCI}10`
-                  }}
+                  className="p-3 rounded-lg border bg-muted/30"
                 >
                   <div className="flex justify-between items-start mb-1">
                     <span className="font-medium text-sm">{sig.name}</span>
@@ -538,11 +578,6 @@ export function FibonacciChart({ indicators, signals }: FibonacciChartProps) {
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground">{sig.description}</p>
-                  {sig.trading_implication && (
-                    <p className="text-xs mt-2 font-medium" style={{ color: CHART_COLORS.categories.FIBONACCI }}>
-                      → {sig.trading_implication}
-                    </p>
-                  )}
                 </div>
               ))}
             </div>
