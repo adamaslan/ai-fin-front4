@@ -152,7 +152,8 @@ export function FibonacciChart({ indicators, signals }: FibonacciChartProps) {
   }));
 
   // Find which Fibonacci level is most relevant to the signal
-  const signalFibLevel = fibSignals[0]?.value || 0;
+  // Default to 0.618 (Golden Ratio) to match generateFibonacciPriceHistory
+  const signalFibLevel = fibSignals[0]?.value || 0.618;
   const normalizedSignalLevel = signalFibLevel > 1 ? signalFibLevel / 100 : signalFibLevel;
 
   // Find closest Fib level to signal
@@ -161,6 +162,9 @@ export function FibonacciChart({ indicators, signals }: FibonacciChartProps) {
     const closestDiff = Math.abs(fibLevels[closest].level - normalizedSignalLevel);
     return currentDiff < closestDiff ? i : closest;
   }, 0);
+
+  // Get the active Fib level (guaranteed to exist since activeFibIndex is valid)
+  const activeFibLevel = fibLevels[activeFibIndex];
 
   // Find which Fibonacci zone the current price is in
   const currentZone = fibLevels.findIndex((fib, i) => {
@@ -435,8 +439,8 @@ export function FibonacciChart({ indicators, signals }: FibonacciChartProps) {
             <span>Swing High (${swingHigh.toFixed(2)})</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-10 h-1 rounded" style={{ backgroundColor: fibLevels[activeFibIndex]?.color }} />
-            <span>Active Fib Level ({fibLevels[activeFibIndex]?.shortLabel})</span>
+            <div className="w-10 h-1 rounded" style={{ backgroundColor: activeFibLevel.color }} />
+            <span>Active Fib Level ({activeFibLevel.shortLabel})</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-8 h-0.5 border-t-2 border-dashed border-gray-400" />
@@ -472,24 +476,24 @@ export function FibonacciChart({ indicators, signals }: FibonacciChartProps) {
           <div
             className="p-4 rounded-lg border-2"
             style={{
-              backgroundColor: `${fibLevels[activeFibIndex]?.color}15`,
-              borderColor: `${fibLevels[activeFibIndex]?.color}50`
+              backgroundColor: `${activeFibLevel.color}15`,
+              borderColor: `${activeFibLevel.color}50`
             }}
           >
             <div className="flex items-center gap-2 mb-2">
               <div
                 className="w-3 h-3 rounded-full animate-pulse"
-                style={{ backgroundColor: fibLevels[activeFibIndex]?.color }}
+                style={{ backgroundColor: activeFibLevel.color }}
               />
-              <span className="text-xs font-medium uppercase" style={{ color: fibLevels[activeFibIndex]?.color }}>
+              <span className="text-xs font-medium uppercase" style={{ color: activeFibLevel.color }}>
                 Signal Level
               </span>
             </div>
-            <p className="text-xl font-bold" style={{ color: fibLevels[activeFibIndex]?.color }}>
-              ${fibLevels[activeFibIndex]?.price.toFixed(2)}
+            <p className="text-xl font-bold" style={{ color: activeFibLevel.color }}>
+              ${activeFibLevel.price.toFixed(2)}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              {fibLevels[activeFibIndex]?.label}
+              {activeFibLevel.label}
             </p>
           </div>
 
